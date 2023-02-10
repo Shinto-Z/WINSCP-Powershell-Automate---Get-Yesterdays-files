@@ -1,82 +1,100 @@
-﻿##Created By Shane Wallace based on examples located at https://winscp.net/eng/docs/library_examples##
-##
-##
+﻿[CmdletBinding()]
+Param(
+[Parameter()]
+[string]$settingsXML
+)
+Clear-Host;
 
-## TO/FROM directories as arrays
-$directories = @(@("remote/folder/location1","C:\local\folder\location1"),@("remote/folder/location2","C:\local\folder\location2"))
+if($($settingsXML) -ne ""){
+ if(Get-Content $settingsXML){
 
-#Get MM/DD/YYYY date
 $dateYesterday=(Get-Date).AddDays(-1).ToString("MM/dd/yyyy")
 
-#Add in WinSCP dll
+Write-Host "date to process is $dateYesterday";
+
 Add-Type -Path "C:\Program Files (x86)\WinSCP\WinSCPnet.dll"
 
- try{
+try{
 
-  # Setup session options; You may want to pipe in authentication for security reasons
+ [xml]$settingsXML = Get-Content $($settingsXML)
+
+ # START Sites
+ $settingsXML.sites.site|ForEach-Object{
+
+  # Set up creds; Base64 encoded passwords aren't the best. Some popular FTP/SFTP programs store creds this way. 
+  # May come up with a better way to store creds in production. Out of scope of this exercise
+  $server=$_.cred.host
+  $user=$_.cred.user
+  $pass=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.cred.pass))
+  $key=$_.cred.key
+
+  # Setup session options
   $sessionOptions = New-Object WinSCP.SessionOptions -Property @{
    Protocol = [WinSCP.Protocol]::Sftp
-   HostName = "sftp.example.com"
-   UserName = "User"
-   Password = "Password"
-   SshHostKeyFingerprint = "ssh-rsa 2048 0a:1b:2c:3d:4e:5f:6a:7b:8c:9d:ae:bf:ca:db:ec:fd"
+   HostName = $server
+   UserName = $user
+   Password = $pass
+   SshHostKeyFingerprint = $key
   }
 
   $session = New-Object WinSCP.Session
- 
   try{
    # Connect
    $session.Open($sessionOptions)
 
-   foreach($directory in $directories){
- 
-    $fileList=@()
+   # Download files
+   $transferOptions = New-Object WinSCP.TransferOptions
+   $transferOptions.TransferMode = [WinSCP.TransferMode]::Binary
 
-    $remoteDirectory = $session.ListDirectory($($directory[0]))
+   Write-Host "START directories"
+   # $($_.source) $($_.destination)
+   $_.directories.directory|ForEach-Object{
 
-    Write-Host "Entering directory" + $($directory[0])
-
-    #Get each file date and compare; If from yesterday, add to array
+    Write-Host "Entering directory $($_.source)"
+    $remoteDirectory = $session.ListDirectory($($_.source))
     foreach ($fileInfo in $remoteDirectory.Files){
      $tempFileInfo=$($fileInfo.LastWriteTime).ToString("MM/dd/yyyy")
      if($tempFileInfo -eq $dateYesterday){
-      $fileList+=$($fileInfo.Name)
+      Write-Host "Matched file $($fileInfo.name) - $($tempFileInfo)"
+      Write-Host "Downloading $($fileInfo.Name) to $($_.destination)"
+
+      $transferResult = $session.GetFiles("$($_.source)/$($fileInfo.Name)", "$($_.destination)\$($fileInfo.Name)",$False, $transferOptions)
+      # Throw on any error
+      $transferResult.Check()
+
+      # Print results
+      foreach ($transfer in $transferResult.Transfers){
+       Write-Host "Download of $($transfer.FileName) succeeded"
+      }
      }
-    }
-
-    # Set Download options
-    $transferOptions = New-Object WinSCP.TransferOptions
-    $transferOptions.TransferMode = [WinSCP.TransferMode]::Binary
-
-    #iterate through array
-    foreach($downloadFile in $fileList){
-
-     $fileToDL=$($directory[0])+"/"+$downloadFile
-
-     Write-Host "downloading $fileToDL from $($directory[1])"
-
-     #download file
-     $transferResult = $session.GetFiles($fileToDL, $($directory[1]),$False, $transferOptions)
- 
-     # Throw on any error
-     $transferResult.Check()
- 
-     # Print results
-     foreach ($transfer in $transferResult.Transfers){
-      Write-Host "Download of $($transfer.FileName) succeeded"
-     }
-
     }
    }
+   Write-Host "END directories"
+
   }
   finally{
    # Disconnect, clean up
    $session.Dispose()
   }
  
-  exit 0
  }
- catch{
-  Write-Host "Error: $($_.Exception.Message)"
-  exit 1
+ # END Sites
+
+ exit 0
+
+}
+catch{
+ Write-Host "Error: $($_.Exception.Message)"
+ exit 1
+}
+
+
  }
+ else{
+  Write-Host "Cannot Read settings XML File."
+ }
+
+}
+else{
+ Write-Host "The settings XML File must be passed as a parameter to the script."
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" ?>
+<sites>
+ <site>
+  <cred>
+   <host>testsite.com</host>
+  <user>TestUser</user>
+  <pass>VGVzdFBhc3N3b3Jk</pass>
+  <key>ssh-rsa 2048 0a:1b:3c:4d:5e:6f:70:81:92:a3:b4:c5:d6:e7:f8:09</key>
+  </cred>
+  <directories>
+   <directory>
+    <source>/folder/folder1</source>
+    <destination>C:\Users\TestUser\SFTPFiles\Folder1</destination>
+   </directory>
+   <directory>
+    <source>/folder/folder2</source>
+    <destination>C:\Users\TestUser\SFTPFiles\Folder2</destination>
+   </directory>
+  </directories>
+ </site>
+</sites>
